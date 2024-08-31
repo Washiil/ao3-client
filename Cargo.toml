@@ -3,7 +3,7 @@ name = "ao3-client"
 version = "0.1.0"
 edition = "2021"
 authors = ["Washi"]
-descrption = "A client for interfacing with the AO3 (Archive of Our Own) website/data."
+description = "A client for interfacing with the AO3 (Archive of Our Own) website/data."
 repository = "https://github.com/Washiil/ao3-client"
 readme = "README.md"
 
