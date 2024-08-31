@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Washi"]
 description = "A client for interfacing with the AO3 (Archive of Our Own) website/data."
+license-file = "LICENSE.txt"
 repository = "https://github.com/Washiil/ao3-client"
 readme = "README.md"
 
