@@ -10,15 +10,15 @@ lazy_static::lazy_static! {
     static ref PUBLICATION_DATE_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.stats dd.published").unwrap();
     static ref UPDATED_DATE_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.stats dd.status").unwrap();
     static ref WORD_COUNT_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.stats dd.words").unwrap();
-    static ref ARCHIVE_WARNINGS: Selector = Selector::parse("").unwrap();
-    static ref TAGS_SELECTOR: Selector = Selector::parse("").unwrap();
-    static ref CHARACTER_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.character.tags ul.commas li").unwrap();
-    static ref RELATIONSHIP_SELECTOR: Selector = Selector::parse("").unwrap();
+    static ref ARCHIVE_WARNINGS_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.warning.tags ul.commas li a.tag").unwrap();
+    static ref TAGS_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.freeform.tags ul.commas li a.tag").unwrap();
+    static ref CHARACTERS_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.character.tags ul.commas li a.tag").unwrap();
+    static ref RELATIONSHIP_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.relationship.tags ul.commas li a.tag").unwrap();
     static ref CHAPTERS_SELECTOR: Selector = Selector::parse("").unwrap();
     static ref CURRENT_CHAPTER_SELECTOR: Selector = Selector::parse("").unwrap();
     static ref HITS_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.stats dd.hits").unwrap();
     static ref LANGUAGE_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.language").unwrap();
-    static ref RATING_SELECTOR: Selector = Selector::parse("").unwrap();
+    static ref RATING_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.rating.tags ul.commas li a.tag").unwrap();
     static ref SUMMARY_SELECTOR: Selector = Selector::parse("#workskin .preface.group div.summary.module blockquote.userstuff").unwrap();
     // Summary is broken up into multiple elements so we will have to figure out the best way to parse those
     // It appears things can use most markdown like <em> <br> <p> or <strong>
@@ -31,21 +31,27 @@ pub struct Chapter {
 }
 
 #[derive(Default, Debug)]
+pub struct Tag {
+    name: String,
+    link: String,
+}
+
+#[derive(Default, Debug)]
 pub struct Work {
     title: String,
     date_published: String,
     date_updated: String,
     word_count: u32,
     author: String,
-    archive_warnings: Vec<ArchiveWarning>,
-    tags: Vec<String>,
-    characters: Vec<String>,
-    relationships: Vec<String>,
+    archive_warnings: Vec<Tag>,
+    tags: Vec<Tag>,
+    characters: Vec<Tag>,
+    relationships: Vec<Tag>,
     current_chapter: Chapter,
     chapters: Vec<Chapter>,
     hits: u32,
     language: String,
-    rating: String,
+    ratings: Vec<Tag>,
 }
 
 #[derive(Error, Debug)]
@@ -100,26 +106,45 @@ impl Work {
         output.word_count =
             Self::parse_inner_number_element(document, &WORD_COUNT_SELECTOR, "word_count")? as u32;
         output.hits = Self::parse_inner_number_element(document, &HITS_SELECTOR, "hits")? as u32;
-        output.characters = Self::parse_text_list_element(document, &CHARACTER_SELECTOR, "characters")?;
+
+        output.tags = Self::parse_tag_list(document, &TAGS_SELECTOR, "tags")?;
+        output.characters = Self::parse_tag_list(document, &CHARACTERS_SELECTOR, "characters")?;
+        output.archive_warnings = Self::parse_tag_list(document, &ARCHIVE_WARNINGS_SELECTOR, "warnings")?;
+        output.relationships = Self::parse_tag_list(document, &RELATIONSHIP_SELECTOR, "relationships")?;
+        output.ratings =  Self::parse_tag_list(document, &RATING_SELECTOR, "ratings")?;
+
 
         // Add more parsing logic here as needed...
 
         Ok(output)
     }
 
-    fn parse_text_list_element(
+    fn parse_tag_list(
         document: &Html,
         selector: &Selector,
         name: &'static str,
-    ) -> Result<Vec<String>, WorkError> {
-        let items = document
-            .select(selector)
-            .map(|li| li.text().collect::<String>())
-            .collect::<Vec<String>>();
+    ) -> Result<Vec<Tag>, WorkError> {
+        let tags: Vec<Tag> = document
+        .select(selector)
+        .filter_map(|element| {
+            let name = element.text().collect::<String>().trim().to_string();
+            let link = element
+                .value()
+                .attr("href")
+                .map(|s| s.to_string());
 
-        match items.is_empty() {
+            match link {
+                Some(link) => Some(Tag { name, link }),
+                None => None,
+            }
+        })
+        .collect();
+            
+        println!("{:?}", tags);
+
+        match tags.is_empty() {
             true => return Err(WorkError::NoItemsFound(name)),
-            false => Ok(items),
+            false => Ok(tags),
         }
     }
 
