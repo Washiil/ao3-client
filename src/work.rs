@@ -15,7 +15,7 @@ lazy_static::lazy_static! {
     static ref CHARACTERS_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.character.tags ul.commas li a.tag").unwrap();
     static ref RELATIONSHIP_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.relationship.tags ul.commas li a.tag").unwrap();
     static ref CHAPTERS_SELECTOR: Selector = Selector::parse("#selected_id option").unwrap();
-    static ref CURRENT_CHAPTER_SELECTOR: Selector = Selector::parse("").unwrap();
+    static ref CONTENT_SELECTOR: Selector = Selector::parse("#workskin #chapters div.chapter div.userstuff.module p").unwrap();
     static ref HITS_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.stats dd.hits").unwrap();
     static ref LANGUAGE_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.language").unwrap();
     static ref RATING_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.rating.tags ul.commas li a.tag").unwrap();
@@ -36,6 +36,18 @@ pub struct Tag {
     link: String,
 }
 
+#[derive(Debug)]
+enum Content {
+    Text(String),
+    Bold(String),
+    Italic(String),
+}
+
+#[derive(Default, Debug)]
+struct Paragraph {
+    content: Vec<Content>,
+}
+
 #[derive(Default, Debug)]
 pub struct Work {
     title: String,
@@ -50,6 +62,7 @@ pub struct Work {
     chapters: Vec<Chapter>,
     hits: u32,
     language: String,
+    body: Vec<Paragraph>,
     ratings: Vec<Tag>,
 }
 
@@ -114,10 +127,51 @@ impl Work {
             Self::parse_tag_list(document, &RELATIONSHIP_SELECTOR, "relationships")?;
         output.ratings = Self::parse_tag_list(document, &RATING_SELECTOR, "ratings")?;
         output.chapters = Self::parse_chapters(document, &CHAPTERS_SELECTOR)?;
+        output.body = Self::parse_paragraphs(document, &CONTENT_SELECTOR)?;
 
         // Add more parsing logic here as needed...
 
         Ok(output)
+    }
+
+    fn parse_paragraph(element: scraper::ElementRef) -> Result<Paragraph, WorkError> {
+        let mut content = Vec::new();
+    
+        for child in element.children() {
+            if let Some(text) = child.value().as_text() {
+                content.push(Content::Text(text.to_string().trim().to_string()));
+            } else if let Some(element) = child.value().as_element() {
+                let tag_name = element.name();
+                match tag_name {
+                    "strong" => {
+                        println!("Strong: {:?}", element);
+                    }
+                    "em" => {
+                        println!("Em: {:?}", element);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    
+        if content.is_empty() {
+            return Err(WorkError::NoItemsFound("paragraph"));
+        }
+    
+        Ok(Paragraph { content })
+    }
+
+    fn parse_paragraphs(document: &Html, selector: &Selector) -> Result<Vec<Paragraph>, WorkError> {
+        let paragraphs = document
+            .select(selector)
+            .map(|p| Work::parse_paragraph(p))
+            .collect::<Result<Vec<_>, _>>()?;
+    
+        if paragraphs.is_empty() {
+            return Err(WorkError::NoItemsFound("paragraphs"));
+        }
+    
+        Ok(paragraphs)
     }
 
     fn parse_chapters(document: &Html, selector: &Selector) -> Result<Vec<Chapter>, WorkError> {
@@ -128,8 +182,8 @@ impl Work {
                 let chapter_id = element.value().attr("value").map(|s| s.to_string());
 
                 match chapter_id {
-                    Some(id) => Some(Chapter { name, id}),
-                    None => None
+                    Some(id) => Some(Chapter { name, id }),
+                    None => None,
                 }
             })
             .collect::<Vec<Chapter>>();
@@ -209,7 +263,7 @@ mod tests {
 
         let x = x.unwrap();
 
-        println!("WORK:\n{:#?}", x);
+        // println!("WORK:\n{:#?}", x);
 
         assert!(false)
     }
