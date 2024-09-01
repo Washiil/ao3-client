@@ -135,6 +135,7 @@ impl Work {
     }
 
     fn parse_paragraph(element: scraper::ElementRef) -> Result<Paragraph, WorkError> {
+        // TODO: This has to work somewhat recursively to allow for nested types
         let mut content = Vec::new();
     
         for child in element.children() {
