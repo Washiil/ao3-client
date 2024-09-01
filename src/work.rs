@@ -14,7 +14,7 @@ lazy_static::lazy_static! {
     static ref TAGS_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.freeform.tags ul.commas li a.tag").unwrap();
     static ref CHARACTERS_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.character.tags ul.commas li a.tag").unwrap();
     static ref RELATIONSHIP_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.relationship.tags ul.commas li a.tag").unwrap();
-    static ref CHAPTERS_SELECTOR: Selector = Selector::parse("").unwrap();
+    static ref CHAPTERS_SELECTOR: Selector = Selector::parse("#selected_id option").unwrap();
     static ref CURRENT_CHAPTER_SELECTOR: Selector = Selector::parse("").unwrap();
     static ref HITS_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.stats dd.hits").unwrap();
     static ref LANGUAGE_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.language").unwrap();
@@ -27,7 +27,7 @@ lazy_static::lazy_static! {
 #[derive(Default, Debug)]
 pub struct Chapter {
     name: String,
-    id: u32,
+    id: String,
 }
 
 #[derive(Default, Debug)]
@@ -47,7 +47,6 @@ pub struct Work {
     tags: Vec<Tag>,
     characters: Vec<Tag>,
     relationships: Vec<Tag>,
-    current_chapter: Chapter,
     chapters: Vec<Chapter>,
     hits: u32,
     language: String,
@@ -109,14 +108,36 @@ impl Work {
 
         output.tags = Self::parse_tag_list(document, &TAGS_SELECTOR, "tags")?;
         output.characters = Self::parse_tag_list(document, &CHARACTERS_SELECTOR, "characters")?;
-        output.archive_warnings = Self::parse_tag_list(document, &ARCHIVE_WARNINGS_SELECTOR, "warnings")?;
-        output.relationships = Self::parse_tag_list(document, &RELATIONSHIP_SELECTOR, "relationships")?;
-        output.ratings =  Self::parse_tag_list(document, &RATING_SELECTOR, "ratings")?;
-
+        output.archive_warnings =
+            Self::parse_tag_list(document, &ARCHIVE_WARNINGS_SELECTOR, "warnings")?;
+        output.relationships =
+            Self::parse_tag_list(document, &RELATIONSHIP_SELECTOR, "relationships")?;
+        output.ratings = Self::parse_tag_list(document, &RATING_SELECTOR, "ratings")?;
+        output.chapters = Self::parse_chapters(document, &CHAPTERS_SELECTOR)?;
 
         // Add more parsing logic here as needed...
 
         Ok(output)
+    }
+
+    fn parse_chapters(document: &Html, selector: &Selector) -> Result<Vec<Chapter>, WorkError> {
+        let chapters: Vec<Chapter> = document
+            .select(selector)
+            .filter_map(|element| {
+                let name = element.text().collect::<String>().trim().to_string();
+                let chapter_id = element.value().attr("value").map(|s| s.to_string());
+
+                match chapter_id {
+                    Some(id) => Some(Chapter { name, id}),
+                    None => None
+                }
+            })
+            .collect::<Vec<Chapter>>();
+
+        match chapters.is_empty() {
+            true => Ok(vec![]),
+            false => Ok(chapters),
+        }
     }
 
     fn parse_tag_list(
@@ -125,22 +146,17 @@ impl Work {
         name: &'static str,
     ) -> Result<Vec<Tag>, WorkError> {
         let tags: Vec<Tag> = document
-        .select(selector)
-        .filter_map(|element| {
-            let name = element.text().collect::<String>().trim().to_string();
-            let link = element
-                .value()
-                .attr("href")
-                .map(|s| s.to_string());
+            .select(selector)
+            .filter_map(|element| {
+                let name = element.text().collect::<String>().trim().to_string();
+                let link = element.value().attr("href").map(|s| s.to_string());
 
-            match link {
-                Some(link) => Some(Tag { name, link }),
-                None => None,
-            }
-        })
-        .collect();
-            
-        println!("{:?}", tags);
+                match link {
+                    Some(link) => Some(Tag { name, link }),
+                    None => None,
+                }
+            })
+            .collect();
 
         match tags.is_empty() {
             true => return Err(WorkError::NoItemsFound(name)),
