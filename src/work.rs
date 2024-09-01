@@ -1,26 +1,48 @@
 use crate::{ArchiveWarning, BASE_URL};
 use reqwest::{self, Client};
-use scraper::{Html, Selector};
+use scraper::{selectable::Selectable, Html, Selector};
 use thiserror::Error;
 
 // Pre-parse selectors to avoid redundant parsing
 lazy_static::lazy_static! {
     static ref TITLE_SELECTOR: Selector = Selector::parse("#workskin .preface.group h2.title.heading").unwrap();
     static ref AUTHOR_SELECTOR: Selector = Selector::parse("#workskin .preface.group h3.byline.heading").unwrap();
+    static ref PUBLICATION_DATE_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.stats dd.published").unwrap();
+    static ref UPDATED_DATE_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.stats dd.status").unwrap();
+    static ref WORD_COUNT_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.stats dd.words").unwrap();
+    static ref ARCHIVE_WARNINGS: Selector = Selector::parse("").unwrap();
+    static ref TAGS_SELECTOR: Selector = Selector::parse("").unwrap();
+    static ref CHARACTER_SELECTOR: Selector = Selector::parse("").unwrap();
+    static ref RELATIONSHIP_SELECTOR: Selector = Selector::parse("").unwrap();
+    static ref CHAPTERS_SELECTOR: Selector = Selector::parse("").unwrap();
+    static ref CURRENT_CHAPTER_SELECTOR: Selector = Selector::parse("").unwrap();
+    static ref HITS_SELECTOR: Selector = Selector::parse("div.wrapper dl.work.meta.group dd.stats dd.hits").unwrap();
+    static ref LANGUAGE_SELECTOR: Selector = Selector::parse("").unwrap();
+    static ref RATING_SELECTOR: Selector = Selector::parse("").unwrap();
+    static ref SUMMARY_SELECTOR: Selector = Selector::parse("#workskin .preface.group div.summary.module blockquote.userstuff").unwrap();
+    // Summary is broken up into multiple elements so we will have to figure out the best way to parse those
+    // It appears things can use most markdown like <em> <br> <p> or <strong>
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
+pub struct Chapter {
+    name: String,
+    id: u32
+}
+
+#[derive(Default, Debug)]
 pub struct Work {
     title: String,
-    date: String,
-    words: u32,
+    date_published: String,
+    date_updated: String,
+    word_count: u32,
     author: String,
     archive_warnings: Vec<ArchiveWarning>,
     tags: Vec<String>,
     characters: Vec<String>,
     relationships: Vec<String>,
-    current_chapter: u32,
-    total_chapters: u32,
+    current_chapter: Chapter,
+    chapters: Vec<Chapter>,
     hits: u32,
     language: String,
     rating: String,
@@ -36,6 +58,9 @@ pub enum WorkError {
 
     #[error("Invalid Work ID or inaccessible work")]
     InvalidWorkId,
+
+    #[error("Work property was not able to be parced")]
+    InvalidFormat(&'static str),
 }
 
 impl Work {
@@ -62,19 +87,56 @@ impl Work {
     fn parse_document(document: &Html) -> Result<Work, WorkError> {
         let mut output = Work::default();
 
-        output.title = Self::parse_element(document, &TITLE_SELECTOR, "title")?;
-        output.author = Self::parse_element(document, &AUTHOR_SELECTOR, "author")?;
-        
+        output.title = Self::parse_inner_text_element(document, &TITLE_SELECTOR, "title")?;
+        output.author = Self::parse_inner_text_element(document, &AUTHOR_SELECTOR, "author")?;
+        output.date_published = Self::parse_inner_text_element(document, &PUBLICATION_DATE_SELECTOR, "published")?;
+        output.date_updated = Self::parse_inner_text_element(document, &UPDATED_DATE_SELECTOR, "updated")?;
+        output.word_count = Self::parse_inner_number_element(document, &WORD_COUNT_SELECTOR, "word_count")? as u32;
+        // output.hits = Self::parse_inner_number_element(document, &HITS_SELECTOR, "hits")? as u32;
+
         // Add more parsing logic here as needed...
 
         Ok(output)
     }
 
-    fn parse_element(document: &Html, selector: &Selector, name: &'static str) -> Result<String, WorkError> {
+    fn parse_inner_number_element(document: &Html, selector: &Selector, name: &'static str) -> Result<i32, WorkError> {
+        if let Some(val) = document.select(selector).next() {
+            let str_num = val.text().collect::<String>().replace(",", "");
+            return str_num.parse::<i32>().map_err(|_| WorkError::InvalidFormat(name));
+        }
+        Err(WorkError::InvalidFormat(name))
+    }
+
+    fn parse_inner_text_element(document: &Html, selector: &Selector, name: &'static str) -> Result<String, WorkError> {
         document
             .select(selector)
             .next()
-            .map(|element| element.text().collect::<String>())
+            .map(|element| element.text().collect::<String>().trim().to_string())
             .ok_or_else(|| WorkError::ElementNotFound(name))
+    }
+
+    fn parse_html_element() {
+        // Must parse out inner html that contains
+        // <em> <p> <strong> <br>
+        todo!() 
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn work_from_id() {
+        let x = Work::new("55836682")
+            .await;
+
+        assert!(x.is_ok());
+
+        let x = x.unwrap();
+
+        println!("WORK:\n{:#?}", x);
+
+        assert!(false)
     }
 }
