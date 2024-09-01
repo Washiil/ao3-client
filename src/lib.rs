@@ -1,5 +1,5 @@
-use scraper::{html, selectable::Selectable, Selector};
 use reqwest;
+use scraper::{html, selectable::Selectable, Selector};
 
 pub mod work;
 
@@ -10,13 +10,9 @@ pub fn say_hello(name: &str) -> String {
 }
 
 #[derive(Debug)]
-enum ArchiveWarning {
+enum ArchiveWarning {}
 
-}
-
-struct Client {
-
-}
+struct Client {}
 
 #[cfg(test)]
 mod tests {
@@ -26,10 +22,10 @@ mod tests {
     #[tokio::test]
     async fn get_work() {
         let x = work::Work::new("58593067").await;
-        
+
         match x {
             Ok(val) => todo!(),
-            Err(e) => todo!()
+            Err(e) => todo!(),
         }
     }
 }
